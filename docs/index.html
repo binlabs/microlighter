@@ -366,6 +366,7 @@ export function YetAnotherTodoApp(): JSX.Element {
             <li data-lang="rust">Rust</li>
             <li data-lang="go">Go</li>
             <li data-lang="assembly">Assembly</li>
+            <li data-lang="wgsl">WGSL</li>
           </ul>
         </div>
         <div class="language-group">
@@ -708,6 +709,23 @@ const count = ref(0)
 &lt;/script&gt;
 
 &lt;button @click="count++"&gt;Count: {{ count }}&lt;/button&gt;</code></pre>
+      </template>
+      <template data-lang="wgsl" data-label="WGSL">
+        <pre><code class="language-wgsl">// Vertex shader
+struct VertexOutput {
+    @builtin(position) position: vec4&lt;f32&gt;,
+    @location(0) color: vec3&lt;f32&gt;,
+}
+
+@group(0) @binding(0) var&lt;uniform&gt; mvp: mat4x4&lt;f32&gt;;
+
+@vertex
+fn vs_main(@location(0) pos: vec3&lt;f32&gt;) -&gt; VertexOutput {
+    var out: VertexOutput;
+    out.position = mvp * vec4&lt;f32&gt;(pos, 1.0);
+    out.color = normalize(pos) * 0.5 + 0.5;
+    return out;
+}</code></pre>
       </template>
       <template data-lang="yaml" data-label="YAML">
         <pre><code class="language-yaml">name: CI

@@ -215,6 +215,14 @@ const answer: number = 42;</code></pre>
 const count = ref(0)
 &lt;/script&gt;
 &lt;button @click="count++"&gt;Count: {{ count }}&lt;/button&gt;</code></pre>
+    <pre><code class="language-wgsl">// Compute shader
+@group(0) @binding(0) var&lt;storage, read_write&gt; data: array&lt;f32&gt;;
+
+@compute @workgroup_size(64)
+fn main(@builtin(global_invocation_id) id: vec3&lt;u32&gt;) {
+    let i = id.x;
+    data[i] = clamp(data[i] * 2.0, 0.0, 1.0);
+}</code></pre>
     <pre><code class="language-yaml">name: CI
 on: [push]
 jobs:

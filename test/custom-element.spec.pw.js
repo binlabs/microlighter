@@ -191,4 +191,149 @@ const secondLine = false;</code></pre>
     await expect.poll(() => page.locator("#explicit code").getAttribute("data-language"))
       .toBe("python");
   });
+
+  test("still highlights plain code blocks in the same tree", async ({ page }) => {
+    await page.goto("/docs/custom-element.html", { waitUntil: "networkidle" });
+
+    await expect.poll(() => page.evaluate(() => {
+      for (const highlight of CSS.highlights.values()) {
+        for (const range of highlight) {
+          const code = range.startContainer.parentElement?.closest("code");
+          if (code?.matches(".language-css") && !code.closest("micro-lighter")) return true;
+        }
+      }
+      return false;
+    })).toBe(true);
+  });
+
+  test.describe("inside a shadow root", () => {
+    // Text of every live highlight range, grouped by the id of the host it
+    // renders in. Ranges collapse when their text node is replaced, so skip those.
+    const highlightedText = page => page.evaluate(() => {
+      const byHost = {};
+      for (const highlight of CSS.highlights.values()) {
+        for (const range of highlight) {
+          if (range.collapsed) continue;
+          const element = range.startContainer.parentElement;
+          const host = element.closest("[data-tree]") ?? element.getRootNode().host;
+          if (host) (byHost[host.id] ??= []).push(range.toString());
+        }
+      }
+      return Object.fromEntries(
+        Object.entries(byHost).map(([id, tokens]) => [id, tokens.sort()])
+      );
+    });
+
+    const setUp = (page, html) => page.evaluate(async html => {
+      await import("/docs/microlighter/micro-lighter-element.min.js");
+      document.body.insertAdjacentHTML("beforeend", html);
+      for (const template of document.querySelectorAll("template[shadowrootmode='open']")) {
+        template.parentElement.attachShadow({ mode: "open" }).append(template.content);
+        template.remove();
+      }
+    }, html);
+
+    const block = (language, source) => `
+      <micro-lighter language="${language}"><pre><code>${source}</code></pre></micro-lighter>
+    `;
+
+    test.beforeEach(async ({ page }) => {
+      await page.goto("/docs/custom-element.html", { waitUntil: "networkidle" });
+    });
+
+    test("highlights its code block", async ({ page }) => {
+      await setUp(page, `
+        <div id="host"><template shadowrootmode="open">
+          ${block("javascript", "const first = 1;")}
+        </template></div>
+      `);
+
+      await expect.poll(async () => (await highlightedText(page)).host)
+        .toContain("const");
+    });
+
+    test("re-highlights when the code changes", async ({ page }) => {
+      await setUp(page, `
+        <div id="host"><template shadowrootmode="open">
+          ${block("javascript", "const first = 1;")}
+        </template></div>
+      `);
+      await expect.poll(async () => (await highlightedText(page)).host)
+        .toContain("const");
+
+      await page.locator("#host code").evaluate(code => {
+        code.textContent = "return 2;";
+      });
+
+      await expect.poll(async () => (await highlightedText(page)).host)
+        .toContain("return");
+      expect((await highlightedText(page)).host).not.toContain("const");
+    });
+
+    test("re-highlights when the language changes", async ({ page }) => {
+      await setUp(page, `
+        <div id="host"><template shadowrootmode="open">
+          ${block("javascript", "# comment")}
+        </template></div>
+      `);
+
+      await page.locator("#host micro-lighter").evaluate(element => {
+        element.setAttribute("language", "python");
+      });
+
+      await expect.poll(async () => (await highlightedText(page)).host)
+        .toContain("# comment");
+    });
+
+    test("keeps highlights from the main entry point", async ({ page }) => {
+      await setUp(page, `
+        <div id="host"><template shadowrootmode="open">
+          <pre><code class="language-javascript">const seeded = 1;</code></pre>
+        </template></div>
+      `);
+      await page.evaluate(async () => {
+        const { highlightAll } = await import("/docs/microlighter/index.js");
+        await highlightAll({ root: document.querySelector("#host").shadowRoot });
+      });
+      await expect.poll(async () => (await highlightedText(page)).host)
+        .toContain("const");
+
+      await page.evaluate(() => {
+        document.body.insertAdjacentHTML("beforeend", `
+          <micro-lighter id="light" data-tree language="javascript">
+            <pre><code>return 1;</code></pre>
+          </micro-lighter>
+        `);
+      });
+
+      await expect.poll(async () => (await highlightedText(page)).light)
+        .toContain("return");
+      expect((await highlightedText(page)).host).toContain("const");
+    });
+
+    test("leaves highlights in other trees alone", async ({ page }) => {
+      await setUp(page, `
+        <div id="light" data-tree>${block("javascript", "const light = 1;")}</div>
+        <div id="one"><template shadowrootmode="open">
+          ${block("javascript", "const one = 1;")}
+        </template></div>
+        <div id="two"><template shadowrootmode="open">
+          ${block("javascript", "const two = 2;")}
+        </template></div>
+      `);
+
+      await expect.poll(async () => Object.keys(await highlightedText(page)).sort())
+        .toEqual(["light", "one", "two"]);
+
+      await page.locator("#one code").evaluate(code => {
+        code.textContent = "return 3;";
+      });
+
+      await expect.poll(async () => (await highlightedText(page)).one)
+        .toContain("return");
+      const highlighted = await highlightedText(page);
+      expect(highlighted.light).toContain("const");
+      expect(highlighted.two).toContain("const");
+    });
+  });
 });

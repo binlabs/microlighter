@@ -246,6 +246,32 @@ test.describe("MicroLighter demo site (docs/index.html)", () => {
     });
   });
 
+  test("keeps highlights outside the scanned root", async ({ page }) => {
+    await page.goto(HOMEPAGE, { waitUntil: "networkidle" });
+
+    const highlighted = await page.evaluate(async () => {
+      document.body.insertAdjacentHTML("beforeend", `
+        <div id="first"><pre><code class="language-javascript">const first = 1;</code></pre></div>
+        <div id="second"><pre><code class="language-javascript">const second = 2;</code></pre></div>
+      `);
+
+      const { highlightAll } = await import("/docs/microlighter/index.js");
+      await highlightAll({ root: document.querySelector("#first") });
+      await highlightAll({ root: document.querySelector("#second") });
+
+      const ids = new Set();
+      for (const highlight of CSS.highlights.values()) {
+        for (const range of highlight) {
+          const id = range.startContainer.parentElement?.closest("#first, #second")?.id;
+          if (id) ids.add(id);
+        }
+      }
+      return [...ids].sort();
+    });
+
+    expect(highlighted).toEqual(["first", "second"]);
+  });
+
   test("curates exactly six full static language samples", async ({ page }) => {
     await page.goto(HOMEPAGE, { waitUntil: "networkidle" });
 

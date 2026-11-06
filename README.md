@@ -73,11 +73,12 @@ await highlightAll({
 
 | Option | Default | Description |
 | --- | --- | --- |
-| `root` | `document` | Element or document to search |
+| `root` | `document` | Element, document, or shadow root to search |
 | `selector` | `"pre > code"` | Selector used to find code blocks |
 | `languageAliases` | `{}` | Extra aliases mapped to bundled grammars |
 
 `highlightAll()` returns a promise containing the highlighted code elements.
+Highlights outside `root` are left in place.
 
 ### Automatic highlighting
 
@@ -133,6 +134,17 @@ Import the optional `<micro-lighter>` custom element:
 | `line-numbers` | Adds a line number gutter without changing copied code |
 
 Style the controls with `::part(copy-button)` and `::part(line-numbers)`.
+
+### Shadow DOM
+
+`<micro-lighter>` works inside a shadow root and highlights the code blocks in
+its own tree. `highlightAll()` does not cross shadow boundaries, so pass the
+shadow root as `root` to highlight plain `pre > code` blocks inside one.
+
+For themes to apply in every browser, load the theme stylesheet in the document
+*and* inside the shadow root. Keep `data-syntax-theme` in the document. Chrome
+paints from the document stylesheet alone, but Safari needs the `::highlight()`
+rules in the shadow root too.
 
 ### TypeScript
 

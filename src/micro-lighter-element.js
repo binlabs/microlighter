@@ -192,7 +192,7 @@ export class MicroLighter extends HTMLElement {
 
     this.#updateLineNumbers();
 
-    if (codeBlock) highlightAll();
+    if (codeBlock) highlightAll({ root: /** @type {ParentNode} */ (this.getRootNode()) });
   }
 
   #updateLineNumbers() {

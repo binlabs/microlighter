@@ -6,7 +6,7 @@ import { createGrammarLoader, normalizeLanguage } from "./grammar-dependencies.j
 
 /**
  * @typedef {object} HighlightAllOptions
- * @property {ParentNode} [root=document] Element or document to search.
+ * @property {ParentNode} [root=document] Element, document, or shadow root to search.
  * @property {string} [selector="pre > code"] Selector used to find code blocks.
  * @property {Record<string, string>} [languageAliases] Extra aliases mapped to bundled grammar names.
  */
@@ -56,10 +56,11 @@ const loadGrammars = createGrammarLoader();
 
 /**
  * Highlight sets retained between scans so stale registered ranges can be
- * removed before replacements are created.
+ * removed before replacements are created. Shared through the global symbol
+ * registry because each bundled entry point carries its own copy of this module.
  * @type {Map<string, Highlight>}
  */
-const highlights = new Map();
+const highlights = /** @type {any} */ (globalThis)[Symbol.for("microlighter")] ??= new Map();
 
 /** @type {MatchOffsets} */
 const noMatch = { indices: [[Infinity, Infinity]] };
@@ -178,10 +179,12 @@ export const highlightAll = async ({
   /** @type {Map<string, MatchOffsets>} */
   let matches = new Map();
 
-  highlights.forEach((ranges, category) => {
-    if (CSS.highlights.get(category) === ranges) CSS.highlights.delete(category);
-    ranges.clear();
-  });
+  // Only `root` is rescanned, so keep ranges outside it. `contains` does not
+  // cross shadow boundaries, which leaves other shadow trees untouched.
+  highlights.forEach(ranges => ranges.forEach(range => {
+    const node = range.startContainer;
+    if (!node.isConnected || root.contains(node)) ranges.delete(range);
+  }));
 
   /**
    * Find the next bounded match, reusing compiled grammar expressions and the
@@ -363,6 +366,7 @@ export const highlightAll = async ({
 
   highlights.forEach((ranges, category) => {
     if (ranges.size) CSS.highlights.set(category, ranges);
+    else if (CSS.highlights.get(category) === ranges) CSS.highlights.delete(category);
   });
 
   return codeBlocks;
